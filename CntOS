@@ -1,0 +1,117 @@
+How to Install ProFTPD  
+
+OS: CentOS
+Package : Proftpd
+System User : test1(UID - 500)
+System User Group : test1  (GID - 500)
+Home Directory : /home/test1
+Virtual User : testuser1/testuser2
+Virtual User Group : test1/test1
+Vuser HomeDir : /var/www/hosts/testuser1//var/www/hosts/testuser2
+
+Package : proftpd
+dependencies : GeoIP, GeoIP-GeoLite-data, GeoIP-GeoLite-data-extra, geoipupdate
+
+Create system user for UID/GID -
+#useradd test1
+
+#cat /etc/passwd |grep test1  <<< check UID >>>
+#cat /etc/group |grep test1   <<< check GID >>>
+
+Install proftpd -
+#yum install proftpd     <<<< Enabled EPEL repo >>>>
+
+Change owner/group of proFTPd main file -
+#chown nobody:nobody /etc/proftpd.conf
+#chmod 755 /etc/proftpd.conf
+
+Configure file main file -
+#vim /etc/proftpd.conf
+ServerName		Domain_name/Server_IP                      <<<  0.0.0.0 or abc.com >>>>
+#AuthOrder         mod_auth_pam.c* mod_auth_unix.c    <<< Comment this line  >>>>
+
+########  Add below ############
+AuthOrder			mod_auth_file.c
+AuthUserFile		/etc/proftpd/ftpd.passwd
+AuthGroupFile		/etc/proftpd/ftpd.group
+PersistentPasswd		off
+AuthPAM			off
+RequireValidShell	off
+DefaultRoot			~
+
+LoadModule mod_sftp.c 				<<< Uncomment >>>
+LoadModule mod_sftp_pam.c			<<< Uncomment >>>
+
+############  Add below lines out side  ###################
+<Global>........</Global
+
+<IfModule mod_sftp.c>
+ SFTPEngine ON
+ SFTPLog /var/log/sftp.log
+ Port 3333
+ SFTPHostKey /etc/ssh/ssh_host_rsa_key
+ SFTPAuthMethods    password
+ #SFTPAuthMethods publickey
+ SFTPAuthorizedUserKeys file:/etc/proftpd/ftpd.passwd.keys/%u
+ SFTPLog /var/log/proftpd/sftp.log
+ SFTPCompression delayed
+</IfModule>
+
+Create sFTPd password and group file and change owner/permission -
+#touch /etc/proftpd/ftpd.passwd
+#touch /etc/proftpd/ftpd.group
+#chown nobody:nobody /etc/proftpd/ftpd.passwd
+#chown nobody:nobody /etc/proftpd/ftpd.group
+#chmod 440 /etc/proftpd/ftpd.passwd
+#chmod 440 /etc/proftpd/ftpd.group
+
+Create Vuser home dir -
+#mkdir -p /var/www/hosts/testuser1
+#chown 500:500 /var/www/hosts/testuser1
+#chmod 755 /var/www/hosts/testuser1
+
+Add Vuser for sftp –
+#ftpasswd -file /etc/proftpd/ftpd.passwd -uid 500 -gid 500 -name testuser1 -shell /bin/false -home /var/www/hosts/testuser1 -passwd
+
+Add Group for sftp -
+#ftpasswd -file /etc/proftpd/ftpd.group -group -name test1 -gid 500 -member testuser1
+
+Restart ProFTPd and test your connection -
+#/etc/init.d/proftpd restart
+#sftp -v test1@localhost 3333
+
+Note : Only change “SFTPAuthMethods” in /etc/proftpd.conf file and do below setps -
+
+Configure Key based authentication -
+#ssh-keygen
+Note : Change directory where you want to generating key pair
+Expm -:
+Generating public/private rsa key pair.
+Enter file in which to save the key (/root/.ssh/id_rsa): /home/test1/.ssh/id_rsa  
+Enter passphrase (empty for no passphrase):
+Enter same passphrase again:
+Your identification has been saved in /home/test1/.ssh/id_rsa
+Your public key has been saved in /home/test1/.ssh/id_rsa.pub
+  
+OR
+
+Use existing id_rsa and id_rsa.pub file for proFTPd file -
+#/root/.ssh/id_rsa
+#/root/.ssh/id_rsa.pub
+
+Cereat key auth file and change owner/permission -
+#mkdir etc/sftp.passwd.keys/
+#chown nobody:nobody /etc/proftpd/ftpd.passwd.keys
+#chmod 755 /etc/sftp.passed.keys
+
+Now generate key file for virtual users and save –
+#ssh-keygen -e -f /root/.ssh/id_rsa.pub | tee /etc/proftpd/ftpd.passwd.keys/testuser1
+
+Test proFTPD config file -
+#proftpd -t
+
+Restart ProFTPd and test your connexion
+#/etc/init.d/proftpd restart
+#sftp -v testuser1@localhost 3333 or use filezilla and select key method to add key.
+
+
