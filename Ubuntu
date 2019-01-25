@@ -1,0 +1,146 @@
+ProFTPd with sFTPd
+
+OS: Ubuntu
+Package : Proftpd
+System User : test1(UID - 1006)
+System User Group : test1  (GID - 1006)
+Home Directory : /home/test1
+Virtual User : user1/user2
+Virtual User Group : testuser1/testuser2
+Vuser HomeDir : /var/www/hosts/testuser1 and /var/www/hosts/testuser2
+
+Package : proftpd
+dependencies : GeoIP, GeoIP-GeoLite-data, GeoIP-GeoLite-data-extra, geoipupdate
+
+Create system user for UID/GID -
+#useradd test1
+
+#cat /etc/passwd |grep test1  <<< check UID >>>
+#cat /etc/group |grep test1   <<< check GID >>>
+
+Install proFTPd -
+#apt-get install proftpd         
+
+Method 1: SFTP with ProFTPd (password auth)
+Change owner/group of main file -
+#chown -R  proftpd:nogroup /etc/proftpd
+#chmod 755 /etc/proftpd/proftpd.conf
+
+Configure proFTPd main file -
+#vim /etc/proftpd/proftpd.conf
+
+ServerName  0.0.0.0          		<< HostName/IP_Add >>
+ServerType  standalone			<< Standalone >>
+DefaultRoot  ~   					<<  Uncomment  >>
+CreateHome      on
+
+##########  Add below  ##########
+ #AuthOrder           mod_auth_pam.c* mod_auth_unix.c   
+AuthOrder            mod_auth_file.c mod_auth_unix.c
+AuthUserFile       /etc/proftpd/sftp.passwd				
+AuthUserFile       /etc/proftpd/sftp.group				
+RequireValidShell off
+
+Create sFTPD password and group file and chnge owner/permission -
+#touch /etc/proftpd/sftp.passwd
+#touch /etc/proftpd/sftp.group
+#chown proftpd:nogroup /etc/proftpd/sftp.passwd
+#chown proftpd:nogroup /etc/proftpd/sftp.group
+#chmod 440 /etc/proftpd/sftp.passwd
+#chmod 440 /etc/proftpd/sftp.group
+
+Create system user for UID/GID -
+#useradd test1
+
+#cat /etc/passwd |grep test1
+#cat /etc/group |grep test1
+
+Add Vuser for sftp –
+#ftpasswd -file /etc/proftpd/sftp.passwd -uid 1006 -gid 1006 -name user1 -shell /bin/false -home /var/www/hosts/testuser1 -passwd
+
+Add Group for sftp -
+#ftpasswd -file /etc/proftpd/sftp.group -group -name test1 -gid 1006 -member user1
+
+Create Vuser home dir -
+#mkdir -p /var/www/hosts/testuser1
+#chown 1006:1006 /var/www/hosts/testuser1
+
+<< Select SFTPAuthMethhhods – Password/publickey  >>
+
+Method 2: SFTP with ProFTPd (key auth)
+
+Create profFTPD conf file -
+#vim /etc/proftpd/conf.d/sftp.conf
+
+### Add below ###
+<IfModule mod_sftp.c>
+
+        SFTPEngine on
+        Port 3333
+        SFTPLog /var/log/proftpd/sftp.log
+
+        # Configure both the RSA and DSA host keys, using the same host key
+        # files that OpenSSH uses.
+        SFTPHostKey /etc/ssh/ssh_host_rsa_key
+        SFTPHostKey /etc/ssh/ssh_host_dsa_key
+        
+        #SFTPAuthMethods    password
+        SFTPAuthMethods publickey
+
+        SFTPAuthorizedUserKeys file:/etc/proftpd/authorized_keys/%u
+
+        # Enable compression
+        SFTPCompression delayed
+
+</IfModule>
+
+Create Vuser authorized dir -
+#mkdir /etc/proftpd/authorized_keys
+#chown proftpd:nogroup /etc/proftpd/authorized_keys
+
+Note : if you select password, setup completed. Now you can test here.
+
+Test proFTPD config file -
+#proftpd -t
+
+Restart ProFTPd and test your connexion
+#/etc/init.d/proftpd restart
+#sftp -v -P 3333 user2@localhost
+
+Note : if you select publickey, Do below for key setup and then test.
+
+Configure Key based authentication -
+#ssh-keygen
+Note : Change directory where you want to generating key pair
+Expm -:
+Generating public/private rsa key pair.
+Enter file in which to save the key (/root/.ssh/id_rsa): /home/test1/.ssh/id_rsa           
+Enter passphrase (empty for no passphrase):
+Enter same passphrase again:
+Your identification has been saved in /home/test1/.ssh/id_rsa
+Your public key has been saved in /home/test1/.ssh/id_rsa.pub
+  
+OR
+
+Use existing id_rsa and id_rsa.pub file for proFTPd file -
+ 
+#/root/.ssh/id_rsa
+#/root/.ssh/id_rsa.pub
+
+Now generate key file for virtual users and save -
+#mkdir /etc/proftpd/authorized_keys
+#ssh-keygen -e -f /root/.ssh/id_rsa.pub | sudo tee /etc/proftpd/authorized_keys/user1
+
+
+Test proFTPD config file -
+#proftpd -t
+
+Restart ProFTPd -
+#/etc/init.d/proftpd restart
+
+Now test your connection -
+
+#sftp -v -P 3333 user2@localhost
+
+
+
